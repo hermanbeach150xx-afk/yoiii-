@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐评分网站（GitHub仓库存储+代码复制）</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 评分星星样式 */
+        .rating-star {
+            color: #ccc;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .rating-star.active {
+            color: #ffc107;
+        }
+        /* 播放器进度条样式 */
+        .progress-bar {
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #2563eb;
+            border-radius: 3px;
+            width: 0%;
+        }
+        /* 代码块样式 */
+        .code-block {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 头部导航 -->
+    <header class="bg-white shadow-sm py-4 px-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">音乐评分馆（GitHub存储+代码复制）</h1>
+            <div>
+                <button id="adminLoginBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                    管理员登录
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 管理员面板（默认隐藏） -->
+    <div id="adminPanel" class="container mx-auto px-6 py-4 hidden">
+        <div class="bg-white p-4 rounded shadow-sm mb-6">
+            <h2 class="text-xl font-semibold mb-4">管理员操作面板</h2>
+            <!-- 重要提示：告诉管理员如何上传文件 -->
+            <div class="bg-yellow-50 p-3 rounded mb-4 text-sm">
+                <i class="fas fa-info-circle text-yellow-600 mr-1"></i>
+                请先将MP3文件手动上传到GitHub仓库的 <code>/music</code> 目录，再在此处填写文件名（如 song1.mp3）
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block mb-2 font-medium">歌曲名称</label>
+                    <input type="text" id="songName" class="w-full px-3 py-2 border rounded" placeholder="输入歌曲名">
+                </div>
+                <div>
+                    <label class="block mb-2 font-medium">仓库内MP3文件名</label>
+                    <input type="text" id="songFileName" class="w-full px-3 py-2 border rounded" placeholder="如：love.mp3（需先上传到/music目录）">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block mb-2 font-medium">歌手</label>
+                    <input type="text" id="songSinger" class="w-full px-3 py-2 border rounded" placeholder="输入歌手名">
+                </div>
+                <!-- 仓库配置：管理员需填写自己的GitHub信息 -->
+                <div class="md:col-span-2">
+                    <label class="block mb-2 font-medium">GitHub仓库配置（必填）</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="githubUsername" class="w-full px-3 py-2 border rounded" placeholder="你的GitHub用户名（如：octocat）">
+                        <input type="text" id="githubRepoName" class="w-full px-3 py-2 border rounded" placeholder="仓库名（如：music-website）">
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <button id="uploadSongBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition mr-2">
+                        添加歌曲
+                    </button>
+                    <button id="logoutBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">
+                        退出登录
+                    </button>
+                </div>
+            </div>
+
+            <!-- 新增：代码生成与复制区域 -->
+            <div class="mt-6 border-t pt-6">
+                <h3 class="text-lg font-medium mb-3">歌曲代码生成（可直接粘贴到代码文件）</h3>
+                <div class="mb-3">
+                    <button id="copyAllCodeBtn" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition mb-2">
+                        <i class="fas fa-copy mr-1"></i> 一键复制所有歌曲代码
+                    </button>
+                    <p class="text-sm text-gray-500">复制后可直接替换代码中 <code>let songs = ...</code> 部分的内容</p>
+                </div>
+                <pre class="code-block p-4 overflow-x-auto h-40" id="songCodeBlock">// 暂无歌曲数据，请先添加歌曲</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音乐播放器 -->
+    <div class="container mx-auto px-6 py-4">
+        <div class="bg-white p-6 rounded shadow-sm mb-6">
+            <div id="playerEmpty" class="text-center py-8 text-gray-500">
+                请选择一首歌曲播放
+            </div>
+            <div id="playerContent" class="hidden">
+                <h3 id="currentSongName" class="text-xl font-semibold mb-2"></h3>
+                <p id="currentSongSinger" class="text-gray-600 mb-4"></p>
+                
+                <!-- 播放控制 -->
+                <div class="flex items-center mb-4">
+                    <button id="playBtn" class="text-2xl text-blue-600 mr-4">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button id="pauseBtn" class="text-2xl text-blue-600 mr-4 hidden">
+                        <i class="fas fa-pause"></i>
+                    </button>
+                    <span id="currentTime" class="text-sm text-gray-600 mr-2">00:00</span>
+                    <div class="flex-1 mr-2">
+                        <div class="progress-bar" id="progressBar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                    <span id="totalTime" class="text-sm text-gray-600">00:00</span>
+                </div>
+                
+                <!-- 音量控制 -->
+                <div class="flex items-center">
+                    <i class="fas fa-volume-up text-gray-600 mr-2"></i>
+                    <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="1" class="w-32">
+                </div>
+            </div>
+        </div>
+
+        <!-- 音乐列表 -->
+        <div class="bg-white rounded shadow-sm">
+            <h2 class="text-xl font-semibold p-4 border-b">音乐列表</h2>
+            <div id="songList" class="divide-y">
+                <!-- 歌曲项会通过JS动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员登录弹窗 -->
+    <div id="loginModal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded shadow-lg w-full max-w-md">
+            <h2 class="text-xl font-semibold mb-4">管理员登录</h2>
+            <div class="mb-4">
+                <label class="block mb-2 font-medium">管理员密码</label>
+                <input type="password" id="adminPassword" class="w-full px-3 py-2 border rounded" placeholder="输入管理员密码">
+                <p id="loginError" class="text-red-600 text-sm mt-2 hidden">密码错误，请重试</p>
+            </div>
+            <div class="flex justify-end">
+                <button id="closeLoginBtn" class="px-4 py-2 border rounded mr-2 hover:bg-gray-100 transition">
+                    取消
+                </button>
+                <button id="confirmLoginBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                    登录
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 复制成功提示弹窗 -->
+    <div id="copySuccessModal" class="fixed top-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow-lg hidden transition-opacity">
+        <i class="fas fa-check mr-1"></i> 代码复制成功！
+    </div>
+
+    <!-- 音频元素（隐藏） -->
+    <audio id="audioPlayer" hidden crossorigin="anonymous"></audio>
+
+    <script>
+        // 核心配置
+        const ADMIN_PASSWORD = "admin123"; // 管理员密码（可自定义）
+        const STORAGE_KEY = "music_website_songs_github"; // LocalStorage存储键名
+        
+        // DOM元素获取
+        const adminLoginBtn = document.getElementById('adminLoginBtn');
+        const adminPanel = document.getElementById('adminPanel');
+        const loginModal = document.getElementById('loginModal');
+        const closeLoginBtn = document.getElementById('closeLoginBtn');
+        const confirmLoginBtn = document.getElementById('confirmLoginBtn');
+        const adminPassword = document.getElementById('adminPassword');
+        const loginError = document.getElementById('loginError');
+        const uploadSongBtn = document.getElementById('uploadSongBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const songName = document.getElementById('songName');
+        const songFileName = document.getElementById('songFileName');
+        const songSinger = document.getElementById('songSinger');
+        const githubUsername = document.getElementById('githubUsername');
+        const githubRepoName = document.getElementById('githubRepoName');
+        const songList = document.getElementById('songList');
+        const playerEmpty = document.getElementById('playerEmpty');
+        const playerContent = document.getElementById('playerContent');
+        const currentSongName = document.getElementById('currentSongName');
+        const currentSongSinger = document.getElementById('currentSongSinger');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const currentTime = document.getElementById('currentTime');
+        const totalTime = document.getElementById('totalTime');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const volumeControl = document.getElementById('volumeControl');
+        const audioPlayer = document.getElementById('audioPlayer');
+        // 新增：代码生成相关元素
+        const songCodeBlock = document.getElementById('songCodeBlock');
+        const copyAllCodeBtn = document.getElementById('copyAllCodeBtn');
+        const copySuccessModal = document.getElementById('copySuccessModal');
+
+        // 全局状态
+        let isAdminLoggedIn = false;
+        let songs = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        let currentPlayingSongId = null;
+
+        // 初始化页面
+        init();
+
+        // 初始化函数
+        function init() {
+            renderSongList(); // 渲染歌曲列表
+            updateSongCodeBlock(); // 初始化代码块显示
+            bindEvents();     // 绑定所有事件
+        }
+
+        // 拼接GitHub仓库的MP3 raw地址
+        function getGitHubRawUrl(username, repoName, fileName) {
+            // GitHub raw地址格式：https://raw.githubusercontent.com/用户名/仓库名/main/music/文件名
+            return `https://raw.githubusercontent.com/${username}/${repoName}/main/music/${fileName}`;
+        }
+
+        // 新增：生成歌曲数据的代码片段（可直接粘贴到代码中）
+        function generateSongCode() {
+            if (songs.length === 0) {
+                return "// 暂无歌曲数据，请先添加歌曲\nlet songs = [];";
+            }
+            // 格式化歌曲数据为可粘贴的JS代码，去掉多余的空格，保证格式规范
+            const songsCode = JSON.stringify(songs, null, 4)
+                .replace(/"id": "(\d+)"/g, '"id": "$1"') // 保留ID格式
+                .replace(/"/g, "'"); // 统一使用单引号，符合JS习惯
+            return `// 歌曲数据（可直接替换代码中原有songs定义）\nlet songs = ${songsCode};`;
+        }
+
+        // 新增：更新代码块显示内容
+        function updateSongCodeBlock() {
+            songCodeBlock.textContent = generateSongCode();
+        }
+
+        // 新增：复制代码到剪贴板
+        function copyCodeToClipboard() {
+            const code = generateSongCode();
+            // 使用Clipboard API复制
+            navigator.clipboard.writeText(code).then(() => {
+                // 显示复制成功提示
+                copySuccessModal.classList.remove('hidden');
+                copySuccessModal.classList.add('opacity-100');
+                // 3秒后隐藏提示
+                setTimeout(() => {
+                    copySuccessModal.classList.add('hidden');
+                }, 3000);
+            }).catch(err => {
+                alert('复制失败！请手动复制代码：' + err);
+            });
+        }
+
+        // 渲染歌曲列表
+        function renderSongList() {
+            if (songs.length === 0) {
+                songList.innerHTML = '<div class="p-6 text-center text-gray-500">暂无歌曲</div>';
+                return;
+            }
+
+            songList.innerHTML = '';
+            songs.forEach(song => {
+                // 计算平均分（保留1位小数）
+                const avgScore = song.ratings.length > 0 
+                    ? (song.ratings.reduce((sum, score) => sum + score, 0) / song.ratings.length).toFixed(1)
+                    : '暂无评分';
+                
+                // 创建歌曲项
+                const songItem = document.createElement('div');
+                songItem.className = 'p-4 flex flex-col md:flex-row md:items-center justify-between';
+                songItem.innerHTML = `
+                    <div class="mb-2 md:mb-0">
+                        <h3 class="font-medium">${song.name}</h3>
+                        <p class="text-sm text-gray-600">${song.singer}</p>
+                    </div>
+                    <div class="flex items-center">
+                        <!-- 评分区域 -->
+                        <div class="rating-container mr-4 flex">
+                            ${Array.from({length: 10}).map((_, index) => `
+                                <span class="rating-star text-lg ${index < Math.floor(avgScore) ? 'active' : ''}" data-score="${index + 1}">★</span>
+                            `).join('')}
+                        </div>
+                        <span class="text-sm text-gray-600 mr-4">平均分：${avgScore}</span>
+                        <!-- 操作按钮 -->
+                        <button class="play-song-btn text-blue-600 mr-2" data-id="${song.id}">
+                            <i class="fas fa-play"></i> 播放
+                        </button>
+                        ${isAdminLoggedIn ? `
+                            <button class="delete-song-btn text-red-600" data-id="${song.id}">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        ` : ''}
+                    </div>
+                    <!-- 评分输入（访问者用） -->
+                    <div class="mt-2 md:mt-0">
+                        <label class="text-sm mr-2">评分（1-10分）：</label>
+                        <input type="number" min="0.1" max="10" step="0.1" class="rate-input w-20 px-2 py-1 border rounded text-sm" data-id="${song.id}" placeholder="输入评分">
+                        <button class="rate-btn bg-blue-500 text-white px-2 py-1 rounded text-sm" data-id="${song.id}">提交</button>
+                    </div>
+                `;
+                songList.appendChild(songItem);
+            });
+
+            // 绑定歌曲项的事件（播放、删除、评分）
+            bindSongItemEvents();
+        }
+
+        // 绑定歌曲项的事件
+        function bindSongItemEvents() {
+            // 播放歌曲
+            document.querySelectorAll('.play-song-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const songId = this.getAttribute('data-id');
+                    playSong(songId);
+                });
+            });
+
+            // 删除歌曲（仅管理员）
+            document.querySelectorAll('.delete-song-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const songId = this.getAttribute('data-id');
+                    deleteSong(songId);
+                });
+            });
+
+            // 提交评分
+            document.querySelectorAll('.rate-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const songId = this.getAttribute('data-id');
+                    const input = document.querySelector(`.rate-input[data-id="${songId}"]`);
+                    const score = parseFloat(input.value);
+                    if (!score || score < 0.1 || score > 10) {
+                        alert('请输入0.1-10之间的有效评分');
+                        return;
+                    }
+                    addRating(songId, score);
+                    input.value = ''; // 清空输入框
+                });
+            });
+
+            // 星星评分hover效果
+            document.querySelectorAll('.rating-container').forEach(container => {
+                const stars = container.querySelectorAll('.rating-star');
+                stars.forEach(star => {
+                    star.addEventListener('mouseover', function() {
+                        const score = this.getAttribute('data-score');
+                        stars.forEach(s => {
+                            s.classList.toggle('active', s.getAttribute('data-score') <= score);
+                        });
+                    });
+                    star.addEventListener('mouseout', function() {
+                        const songId = container.closest('.flex').querySelector('.play-song-btn').getAttribute('data-id');
+                        const song = songs.find(s => s.id === songId);
+                        const avgScore = song.ratings.length > 0 
+                            ? song.ratings.reduce((sum, s) => sum + s, 0) / song.ratings.length
+                            : 0;
+                        stars.forEach(s => {
+                            s.classList.toggle('active', s.getAttribute('data-score') <= Math.floor(avgScore));
+                        });
+                    });
+                });
+            });
+        }
+
+        // 绑定全局事件
+        function bindEvents() {
+            // 管理员登录按钮
+            adminLoginBtn.addEventListener('click', () => {
+                loginModal.classList.remove('hidden');
+                adminPassword.value = '';
+                loginError.classList.add('hidden');
+            });
+
+            // 关闭登录弹窗
+            closeLoginBtn.addEventListener('click', () => {
+                loginModal.classList.add('hidden');
+            });
+
+            // 确认登录
+            confirmLoginBtn.addEventListener('click', () => {
+                if (adminPassword.value === ADMIN_PASSWORD) {
+                    isAdminLoggedIn = true;
+                    loginModal.classList.add('hidden');
+                    adminPanel.classList.remove('hidden');
+                    adminLoginBtn.classList.add('hidden');
+                    renderSongList(); // 重新渲染列表（显示删除按钮）
+                    updateSongCodeBlock(); // 登录后更新代码块
+                } else {
+                    loginError.classList.remove('hidden');
+                }
+            });
+
+            // 退出登录
+            logoutBtn.addEventListener('click', () => {
+                isAdminLoggedIn = false;
+                adminPanel.classList.add('hidden');
+                adminLoginBtn.classList.remove('hidden');
+                renderSongList(); // 重新渲染列表（隐藏删除按钮）
+            });
+
+            // 添加歌曲（核心修改：拼接GitHub地址）
+            uploadSongBtn.addEventListener('click', () => {
+                const name = songName.value.trim();
+                const fileName = songFileName.value.trim();
+                const singer = songSinger.value.trim();
+                const username = githubUsername.value.trim();
+                const repoName = githubRepoName.value.trim();
+                
+                // 校验必填项
+                if (!name || !fileName || !singer || !username || !repoName) {
+                    alert('请填写所有字段（包括GitHub仓库配置）');
+                    return;
+                }
+                if (!fileName.endsWith('.mp3')) {
+                    alert('文件名必须以.mp3结尾');
+                    return;
+                }
+
+                // 拼接GitHub raw播放地址
+                const songUrl = getGitHubRawUrl(username, repoName, fileName);
+
+                // 创建新歌曲对象
+                const newSong = {
+                    id: Date.now().toString(), // 用时间戳作为唯一ID
+                    name,
+                    fileName, // 保存文件名，方便后续管理
+                    url: songUrl, // 拼接后的播放地址
+                    singer,
+                    github: { username, repoName }, // 保存GitHub配置
+                    ratings: [] // 初始无评分
+                };
+
+                // 添加并保存
+                songs.push(newSong);
+                saveSongsToStorage();
+                renderSongList();
+                updateSongCodeBlock(); // 新增歌曲后更新代码块
+
+                // 清空输入框（保留GitHub配置，避免重复输入）
+                songName.value = '';
+                songFileName.value = '';
+                songSinger.value = '';
+
+                alert('歌曲添加成功！可点击播放按钮测试');
+            });
+
+            // 新增：绑定复制代码按钮事件
+            copyAllCodeBtn.addEventListener('click', copyCodeToClipboard);
+
+            // 播放器事件
+            // 播放/暂停切换
+            playBtn.addEventListener('click', () => {
+                audioPlayer.play();
+                playBtn.classList.add('hidden');
+                pauseBtn.classList.remove('hidden');
+            });
+
+            pauseBtn.addEventListener('click', () => {
+                audioPlayer.pause();
+                pauseBtn.classList.add('hidden');
+                playBtn.classList.remove('hidden');
+            });
+
+            // 音频加载完成（获取总时长）
+            audioPlayer.addEventListener('loadedmetadata', () => {
+                totalTime.textContent = formatTime(audioPlayer.duration);
+            });
+
+            // 播放进度更新
+            audioPlayer.addEventListener('timeupdate', () => {
+                const current = audioPlayer.currentTime;
+                const total = audioPlayer.duration;
+                const percent = (current / total) * 100;
+                
+                currentTime.textContent = formatTime(current);
+                progressFill.style.width = `${percent}%`;
+            });
+
+            // 进度条点击跳转
+            progressBar.addEventListener('click', (e) => {
+                const rect = progressBar.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percent = (x / rect.width);
+                audioPlayer.currentTime = percent * audioPlayer.duration;
+            });
+
+            // 音量控制
+            volumeControl.addEventListener('input', () => {
+                audioPlayer.volume = volumeControl.value;
+            });
+
+            // 播放结束
+            audioPlayer.addEventListener('ended', () => {
+                pauseBtn.classList.add('hidden');
+                playBtn.classList.remove('hidden');
+                progressFill.style.width = '0%';
+                currentTime.textContent = '00:00';
+            });
+
+            // 播放错误处理（如GitHub地址无效）
+            audioPlayer.addEventListener('error', (e) => {
+                alert(`播放失败！请检查：
+1. MP3文件是否已上传到仓库的/music目录
+2. 文件名是否填写正确
+3. GitHub仓库是否为公共仓库（私有仓库无法通过raw地址访问）`);
+                pauseBtn.classList.add('hidden');
+                playBtn.classList.remove('hidden');
+            });
+        }
+
+        // 播放指定歌曲
+        function playSong(songId) {
+            const song = songs.find(s => s.id === songId);
+            if (!song) return;
+
+            currentPlayingSongId = songId;
+            audioPlayer.src = song.url;
+            audioPlayer.load();
+            audioPlayer.play();
+
+            // 更新播放器显示
+            playerEmpty.classList.add('hidden');
+            playerContent.classList.remove('hidden');
+            currentSongName.textContent = song.name;
+            currentSongSinger.textContent = song.singer;
+            playBtn.classList.add('hidden');
+            pauseBtn.classList.remove('hidden');
+        }
+
+        // 删除歌曲
+        function deleteSong(songId) {
+            if (!confirm('确定要删除这首歌曲吗？（仅删除列表，不会删除仓库中的MP3文件）')) return;
+            
+            // 如果删除的是正在播放的歌曲，停止播放
+            if (currentPlayingSongId === songId) {
+                audioPlayer.pause();
+                playerContent.classList.add('hidden');
+                playerEmpty.classList.remove('hidden');
+                currentPlayingSongId = null;
+            }
+
+            // 过滤掉要删除的歌曲
+            songs = songs.filter(s => s.id !== songId);
+            saveSongsToStorage();
+            renderSongList();
+            updateSongCodeBlock(); // 删除歌曲后更新代码块
+        }
+
+        // 添加评分
+        function addRating(songId, score) {
+            const song = songs.find(s => s.id === songId);
+            if (!song) return;
+
+            song.ratings.push(score);
+            saveSongsToStorage();
+            renderSongList();
+            updateSongCodeBlock(); // 评分后更新代码块（可选，也可仅在添加/删除时更新）
+        }
+
+        // 保存歌曲数据到LocalStorage
+        function saveSongsToStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(songs));
+        }
+
+        // 时间格式化（秒转 mm:ss）
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+    </script>
+</body>
+</html>
