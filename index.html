@@ -45,7 +45,7 @@
     <!-- 头部导航 -->
     <header class="bg-white shadow-sm py-4 px-6">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-gray-800">音乐评分馆（GitHub存储+代码复制）</h1>
+            <h1 class="text-2xl font-bold text-gray-800">又一音乐库（GitHub存储+代码复制）</h1>
             <div>
                 <button id="adminLoginBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
                     管理员登录
@@ -94,7 +94,7 @@
                 </div>
             </div>
 
-            <!-- 代码生成区域（修复：移除错误的JS代码，保留正确HTML结构） -->
+            <!-- 代码生成区域 -->
             <div class="mt-6 border-t pt-6">
                 <h3 class="text-lg font-medium mb-3">歌曲代码生成（可直接粘贴到代码文件）</h3>
                 <div class="mb-3">
@@ -182,12 +182,12 @@
 
     <script>
         // 核心配置
-        const ADMIN_PASSWORD = "admin123"; // 管理员密码（可自定义）
-        const STORAGE_KEY = "music_website_songs_github"; // LocalStorage存储键名
+        const ADMIN_PASSWORD = "1997"; // 管理员密码（可自定义）
+        const STORAGE_KEY = "music_website_songs_github"; // LocalStorage存储歌曲数据
+        const PROGRESS_KEY = "music_website_play_progress"; // 存储播放进度
         
-        // 修复：硬编码歌曲数据（替换原有空数组，确保页面加载就有歌曲）
-        // 正确的仓库名是yoiii-，地址已修正
-        let songs = [
+        // 初始歌曲数据（仅当本地存储无数据时使用）
+        const DEFAULT_SONGS = [
             {
                 'id': '1767680510931',
                 'name': '九万字DJ版',
@@ -201,6 +201,9 @@
                 'ratings': []
             }
         ];
+
+        // 从LocalStorage读取歌曲数据（修复评分丢失问题）
+        let songs = JSON.parse(localStorage.getItem(STORAGE_KEY)) || DEFAULT_SONGS;
 
         // DOM元素获取
         const adminLoginBtn = document.getElementById('adminLoginBtn');
@@ -230,7 +233,6 @@
         const progressFill = document.getElementById('progressFill');
         const volumeControl = document.getElementById('volumeControl');
         const audioPlayer = document.getElementById('audioPlayer');
-        // 新增：代码生成相关元素
         const songCodeBlock = document.getElementById('songCodeBlock');
         const copyAllCodeBtn = document.getElementById('copyAllCodeBtn');
         const copySuccessModal = document.getElementById('copySuccessModal');
@@ -238,6 +240,7 @@
         // 全局状态
         let isAdminLoggedIn = false;
         let currentPlayingSongId = null;
+        let currentPlaybackTime = 0; // 保存当前播放进度（修复暂停后重头播放问题）
 
         // 初始化页面
         init();
@@ -247,40 +250,50 @@
             renderSongList(); // 渲染歌曲列表
             updateSongCodeBlock(); // 初始化代码块显示
             bindEvents();     // 绑定所有事件
+            // 恢复播放进度（页面刷新后）
+            const savedProgress = JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {};
+            if (savedProgress.songId && savedProgress.time) {
+                currentPlayingSongId = savedProgress.songId;
+                currentPlaybackTime = savedProgress.time;
+                // 恢复播放器显示
+                const song = songs.find(s => s.id === currentPlayingSongId);
+                if (song) {
+                    audioPlayer.src = song.url;
+                    audioPlayer.currentTime = currentPlaybackTime;
+                    playerEmpty.classList.add('hidden');
+                    playerContent.classList.remove('hidden');
+                    currentSongName.textContent = song.name;
+                    currentSongSinger.textContent = song.singer;
+                }
+            }
         }
 
         // 拼接GitHub仓库的MP3 raw地址
         function getGitHubRawUrl(username, repoName, fileName) {
-            // GitHub raw地址格式：https://raw.githubusercontent.com/用户名/仓库名/main/music/文件名
             return `https://raw.githubusercontent.com/${username}/${repoName}/main/music/${fileName}`;
         }
 
-        // 新增：生成歌曲数据的代码片段（可直接粘贴到代码中）
+        // 生成歌曲数据的代码片段
         function generateSongCode() {
             if (songs.length === 0) {
                 return "// 暂无歌曲数据，请先添加歌曲\nlet songs = [];";
             }
-            // 格式化歌曲数据为可粘贴的JS代码，去掉多余的空格，保证格式规范
             const songsCode = JSON.stringify(songs, null, 4)
-                .replace(/"id": "(\d+)"/g, '"id": "$1"') // 保留ID格式
-                .replace(/"/g, "'"); // 统一使用单引号，符合JS习惯
+                .replace(/"id": "(\d+)"/g, '"id": "$1"')
+                .replace(/"/g, "'");
             return `// 歌曲数据（可直接替换代码中原有songs定义）\nlet songs = ${songsCode};`;
         }
 
-        // 新增：更新代码块显示内容
+        // 更新代码块显示内容
         function updateSongCodeBlock() {
             songCodeBlock.textContent = generateSongCode();
         }
 
-        // 新增：复制代码到剪贴板
+        // 复制代码到剪贴板
         function copyCodeToClipboard() {
             const code = generateSongCode();
-            // 使用Clipboard API复制
             navigator.clipboard.writeText(code).then(() => {
-                // 显示复制成功提示
                 copySuccessModal.classList.remove('hidden');
-                copySuccessModal.classList.add('opacity-100');
-                // 3秒后隐藏提示
                 setTimeout(() => {
                     copySuccessModal.classList.add('hidden');
                 }, 3000);
@@ -298,12 +311,10 @@
 
             songList.innerHTML = '';
             songs.forEach(song => {
-                // 计算平均分（保留1位小数）
                 const avgScore = song.ratings.length > 0 
                     ? (song.ratings.reduce((sum, score) => sum + score, 0) / song.ratings.length).toFixed(1)
                     : '暂无评分';
                 
-                // 创建歌曲项
                 const songItem = document.createElement('div');
                 songItem.className = 'p-4 flex flex-col md:flex-row md:items-center justify-between';
                 songItem.innerHTML = `
@@ -339,7 +350,6 @@
                 songList.appendChild(songItem);
             });
 
-            // 绑定歌曲项的事件（播放、删除、评分）
             bindSongItemEvents();
         }
 
@@ -372,7 +382,7 @@
                         return;
                     }
                     addRating(songId, score);
-                    input.value = ''; // 清空输入框
+                    input.value = '';
                 });
             });
 
@@ -421,8 +431,8 @@
                     loginModal.classList.add('hidden');
                     adminPanel.classList.remove('hidden');
                     adminLoginBtn.classList.add('hidden');
-                    renderSongList(); // 重新渲染列表（显示删除按钮）
-                    updateSongCodeBlock(); // 登录后更新代码块
+                    renderSongList();
+                    updateSongCodeBlock();
                 } else {
                     loginError.classList.remove('hidden');
                 }
@@ -433,10 +443,10 @@
                 isAdminLoggedIn = false;
                 adminPanel.classList.add('hidden');
                 adminLoginBtn.classList.remove('hidden');
-                renderSongList(); // 重新渲染列表（隐藏删除按钮）
+                renderSongList();
             });
 
-            // 添加歌曲（核心修改：拼接GitHub地址）
+            // 添加歌曲
             uploadSongBtn.addEventListener('click', () => {
                 const name = songName.value.trim();
                 const fileName = songFileName.value.trim();
@@ -444,7 +454,6 @@
                 const username = githubUsername.value.trim();
                 const repoName = githubRepoName.value.trim();
                 
-                // 校验必填项
                 if (!name || !fileName || !singer || !username || !repoName) {
                     alert('请填写所有字段（包括GitHub仓库配置）');
                     return;
@@ -454,27 +463,22 @@
                     return;
                 }
 
-                // 拼接GitHub raw播放地址
                 const songUrl = getGitHubRawUrl(username, repoName, fileName);
-
-                // 创建新歌曲对象
                 const newSong = {
-                    id: Date.now().toString(), // 用时间戳作为唯一ID
+                    id: Date.now().toString(),
                     name,
-                    fileName, // 保存文件名，方便后续管理
-                    url: songUrl, // 拼接后的播放地址
+                    fileName,
+                    url: songUrl,
                     singer,
-                    github: { username, repoName }, // 保存GitHub配置
-                    ratings: [] // 初始无评分
+                    github: { username, repoName },
+                    ratings: []
                 };
 
-                // 添加并保存
                 songs.push(newSong);
                 saveSongsToStorage();
                 renderSongList();
-                updateSongCodeBlock(); // 新增歌曲后更新代码块
+                updateSongCodeBlock();
 
-                // 清空输入框（保留GitHub配置，避免重复输入）
                 songName.value = '';
                 songFileName.value = '';
                 songSinger.value = '';
@@ -482,26 +486,38 @@
                 alert('歌曲添加成功！可点击播放按钮测试');
             });
 
-            // 新增：绑定复制代码按钮事件
+            // 复制代码按钮
             copyAllCodeBtn.addEventListener('click', copyCodeToClipboard);
 
             // 播放器事件
-            // 播放/暂停切换
+            // 播放按钮（修复：恢复进度播放）
             playBtn.addEventListener('click', () => {
+                audioPlayer.currentTime = currentPlaybackTime; // 恢复进度
                 audioPlayer.play();
                 playBtn.classList.add('hidden');
                 pauseBtn.classList.remove('hidden');
             });
 
+            // 暂停按钮（修复：记录暂停进度）
             pauseBtn.addEventListener('click', () => {
+                currentPlaybackTime = audioPlayer.currentTime; // 保存进度
+                // 保存进度到LocalStorage（防止刷新丢失）
+                localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+                    songId: currentPlayingSongId,
+                    time: currentPlaybackTime
+                }));
                 audioPlayer.pause();
                 pauseBtn.classList.add('hidden');
                 playBtn.classList.remove('hidden');
             });
 
-            // 音频加载完成（获取总时长）
+            // 音频加载完成
             audioPlayer.addEventListener('loadedmetadata', () => {
                 totalTime.textContent = formatTime(audioPlayer.duration);
+                // 如果有保存的进度，设置到音频中
+                if (currentPlaybackTime > 0) {
+                    audioPlayer.currentTime = currentPlaybackTime;
+                }
             });
 
             // 播放进度更新
@@ -519,7 +535,13 @@
                 const rect = progressBar.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const percent = (x / rect.width);
-                audioPlayer.currentTime = percent * audioPlayer.duration;
+                const newTime = percent * audioPlayer.duration;
+                audioPlayer.currentTime = newTime;
+                currentPlaybackTime = newTime; // 更新保存的进度
+                localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+                    songId: currentPlayingSongId,
+                    time: currentPlaybackTime
+                }));
             });
 
             // 音量控制
@@ -533,9 +555,14 @@
                 playBtn.classList.remove('hidden');
                 progressFill.style.width = '0%';
                 currentTime.textContent = '00:00';
+                currentPlaybackTime = 0; // 播放结束重置进度
+                localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+                    songId: currentPlayingSongId,
+                    time: 0
+                }));
             });
 
-            // 播放错误处理（增强：更详细的错误提示）
+            // 播放错误处理
             audioPlayer.addEventListener('error', (e) => {
                 let errorMsg = '';
                 switch(e.target.error.code) {
@@ -560,12 +587,23 @@
             });
         }
 
-        // 播放指定歌曲
+        // 播放指定歌曲（优化：同一首歌不重新加载）
         function playSong(songId) {
             const song = songs.find(s => s.id === songId);
             if (!song) return;
 
+            // 如果是同一首歌，直接恢复播放
+            if (currentPlayingSongId === songId && audioPlayer.src === song.url) {
+                audioPlayer.currentTime = currentPlaybackTime;
+                audioPlayer.play();
+                playBtn.classList.add('hidden');
+                pauseBtn.classList.remove('hidden');
+                return;
+            }
+
+            // 切换歌曲，重置进度
             currentPlayingSongId = songId;
+            currentPlaybackTime = 0;
             audioPlayer.src = song.url;
             audioPlayer.load();
             audioPlayer.play();
@@ -577,25 +615,31 @@
             currentSongSinger.textContent = song.singer;
             playBtn.classList.add('hidden');
             pauseBtn.classList.remove('hidden');
+
+            // 保存当前播放的歌曲ID（进度）
+            localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+                songId: currentPlayingSongId,
+                time: 0
+            }));
         }
 
         // 删除歌曲
         function deleteSong(songId) {
             if (!confirm('确定要删除这首歌曲吗？（仅删除列表，不会删除仓库中的MP3文件）')) return;
             
-            // 如果删除的是正在播放的歌曲，停止播放
             if (currentPlayingSongId === songId) {
                 audioPlayer.pause();
                 playerContent.classList.add('hidden');
                 playerEmpty.classList.remove('hidden');
                 currentPlayingSongId = null;
+                currentPlaybackTime = 0;
+                localStorage.removeItem(PROGRESS_KEY);
             }
 
-            // 过滤掉要删除的歌曲
             songs = songs.filter(s => s.id !== songId);
             saveSongsToStorage();
             renderSongList();
-            updateSongCodeBlock(); // 删除歌曲后更新代码块
+            updateSongCodeBlock();
         }
 
         // 添加评分
@@ -604,9 +648,9 @@
             if (!song) return;
 
             song.ratings.push(score);
-            saveSongsToStorage();
+            saveSongsToStorage(); // 保存到LocalStorage，刷新不丢失
             renderSongList();
-            updateSongCodeBlock(); // 评分后更新代码块（可选，也可仅在添加/删除时更新）
+            updateSongCodeBlock();
         }
 
         // 保存歌曲数据到LocalStorage
@@ -616,7 +660,7 @@
 
         // 时间格式化（秒转 mm:ss）
         function formatTime(seconds) {
-            if (isNaN(seconds)) return '00:00'; // 修复：处理NaN情况
+            if (isNaN(seconds)) return '00:00';
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -624,4 +668,3 @@
     </script>
 </body>
 </html>
-
